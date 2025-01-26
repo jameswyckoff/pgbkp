@@ -3,11 +3,17 @@ set -e
 # Function to extract components from PostgreSQL URI
 parse_uri() {
     local uri=$1
-    local user=$(echo $uri | sed -E 's/^postgres(ql)?:\/\/([^:]+):.*/\2/')
-    local password=$(echo $uri | sed -E 's/^postgres(ql)?:\/\/[^:]+:([^@]+).*/\2/')
-    local host=$(echo $uri | sed -E 's/^postgres(ql)?:\/\/[^@]+@([^:]+).*/\2/')
-    local port=$(echo $uri | sed -E 's/.*:([0-9]+)\/.*/\1/')
-    local dbname=$(echo $uri | sed -E 's/.*\/([^?]+).*/\1/')
+    local user
+    local password
+    local host
+    local port
+    local dbname
+
+    user=$(echo "$uri" | sed -E 's/^postgres(ql)?:\/\/([^:]+):.*/\2/')
+    password=$(echo "$uri" | sed -E 's/^postgres(ql)?:\/\/[^:]+:([^@]+).*/\2/')
+    host=$(echo "$uri" | sed -E 's/^postgres(ql)?:\/\/[^@]+@([^:]+).*/\2/')
+    port=$(echo "$uri" | sed -E 's/.*:([0-9]+)\/.*/\1/')
+    dbname=$(echo "$uri" | sed -E 's/.*\/([^?]+).*/\1/')
     
     echo "$user|$password|$host|$port|$dbname"
 }
@@ -51,7 +57,7 @@ validate_backup_file() {
 check_requirements() {
     local tools=("pg_dump" "pg_restore" "psql")
     for tool in "${tools[@]}"; do
-        if ! command -v $tool &> /dev/null; then
+        if ! command -v "$tool" &> /dev/null; then
             echo "Error: Required tool '$tool' is not installed"
             exit 1
         fi
@@ -64,7 +70,7 @@ backup_database() {
     local dump_file=$2
     
     # Parse URI
-    IFS='|' read user pass host port db <<< $(parse_uri "$uri")
+    IFS='|' read -r user pass host port db <<< "$(parse_uri "$uri")"
     
     echo "Starting database backup..."
     echo "Source database: $db on $host:$port"
@@ -98,7 +104,7 @@ restore_database() {
     local dump_file=$2
     
     # Parse URI
-    IFS='|' read user pass host port db <<< $(parse_uri "$uri")
+    IFS='|' read -r user pass host port db <<< "$(parse_uri "$uri")"
     
     echo "Starting database restore..."
     echo "Destination database: $db on $host:$port"
@@ -147,7 +153,8 @@ restore_database() {
 migrate_database() {
     local source=$1
     local dest=$2
-    local temp_dump_file="/tmp/db_backup_$(date +%Y%m%d_%H%M%S).dump"
+    local temp_dump_file
+    temp_dump_file="/tmp/db_backup_$(date +%Y%m%d_%H%M%S).dump"
     local source_is_uri=false
     local dest_is_uri=false
     
@@ -193,7 +200,7 @@ migrate_database() {
 }
 
 # Main script
-main() {
+main () {
     # Check if correct number of arguments provided
     if [ "$#" -ne 2 ]; then
         echo "Usage: $0 <source> <destination>"
@@ -216,7 +223,7 @@ main() {
     check_requirements
     
     # Perform migration
-    migrate_database "$source_uri" "$dest_uri"
+    migrate_database "$source" "$dest"
 }
 
 # Execute main function with all script arguments
