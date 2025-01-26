@@ -19,18 +19,18 @@ There are several ways to use this tool with Nix:
 
 1. Quick run without installation:
 ```bash
-nix run github:yourusername/pgbkp -- <source> <destination>
+nix run github:jameswyckoff/pgbkp -- <source> <destination>
 ```
 
 2. Install to your profile:
 ```bash
-nix profile install github:yourusername/pgbkp
+nix profile install github:jameswyckoff/pgbkp
 ```
 
 3. Add to your NixOS/Home Manager configuration:
 ```nix
 {
-  inputs.pgbkp.url = "github:yourusername/pgbkp";
+  inputs.pgbkp.url = "github:jameswyckoff/pgbkp";
   
   # Use in your configuration
   environment.systemPackages = [ inputs.pgbkp.packages.${system}.default ];
@@ -46,7 +46,7 @@ While using Nix is recommended to ensure correct dependencies, you can also run 
 
 Clone the repository and make the script executable:
 ```bash
-git clone https://github.com/yourusername/pgbkp.git
+git clone https://github.com/jameswyckoff/pgbkp.git
 chmod +x pgbkp/script.sh
 ./pgbkp/script.sh <source> <destination>
 ```
