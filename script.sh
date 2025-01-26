@@ -12,12 +12,37 @@ parse_uri() {
     echo "$user|$password|$host|$port|$dbname"
 }
 
+# Function to check if input is a PostgreSQL URI
+is_uri() {
+    local input=$1
+    [[ $input =~ ^postgres(ql)?:\/\/ ]]
+}
+
+# Function to check if input is a backup file
+is_backup_file() {
+    local input=$1
+    [[ -f $input ]] && file "$input" | grep -q "PostgreSQL custom database dump"
+}
+
 # Function to validate PostgreSQL URI
 validate_uri() {
     local uri=$1
     if [[ ! $uri =~ ^postgres(ql)?:\/\/[^:]+:[^@]+@[^:]+:[0-9]+\/[^\/]+$ ]]; then
         echo "Error: Invalid PostgreSQL URI format"
         echo "Expected format: postgresql://user:password@host:port/dbname"
+        exit 1
+    fi
+}
+
+# Function to validate backup file
+validate_backup_file() {
+    local file=$1
+    if [[ ! -f $file ]]; then
+        echo "Error: Backup file '$file' does not exist"
+        exit 1
+    fi
+    if ! file "$file" | grep -q "PostgreSQL custom database dump"; then
+        echo "Error: File '$file' is not a valid PostgreSQL backup"
         exit 1
     fi
 }
@@ -120,20 +145,49 @@ restore_database() {
 
 # Function to perform the migration
 migrate_database() {
-    local source_uri=$1
-    local dest_uri=$2
-    local dump_file="/tmp/db_backup_$(date +%Y%m%d_%H%M%S).dump"
+    local source=$1
+    local dest=$2
+    local temp_dump_file="/tmp/db_backup_$(date +%Y%m%d_%H%M%S).dump"
+    local source_is_uri=false
+    local dest_is_uri=false
     
     echo "Starting database migration..."
     
-    # Perform backup
-    backup_database "$source_uri" "$dump_file"
+    # Determine source type
+    if is_uri "$source"; then
+        source_is_uri=true
+        validate_uri "$source"
+    else
+        validate_backup_file "$source"
+    fi
     
-    # Perform restore
-    restore_database "$dest_uri" "$dump_file"
+    # Determine destination type
+    if is_uri "$dest"; then
+        dest_is_uri=true
+        validate_uri "$dest"
+    else
+        if [[ -e $dest ]]; then
+            echo "Error: Destination file '$dest' already exists"
+            exit 1
+        fi
+    fi
     
-    # Cleanup
-    rm -f "$dump_file"
+    # Handle different combinations
+    if $source_is_uri && $dest_is_uri; then
+        # URI to URI
+        backup_database "$source" "$temp_dump_file"
+        restore_database "$dest" "$temp_dump_file"
+        rm -f "$temp_dump_file"
+    elif $source_is_uri && ! $dest_is_uri; then
+        # URI to file
+        backup_database "$source" "$dest"
+    elif ! $source_is_uri && $dest_is_uri; then
+        # File to URI
+        restore_database "$dest" "$source"
+    else
+        # File to file
+        cp "$source" "$dest"
+    fi
     
     echo "Migration completed successfully!"
 }
@@ -142,17 +196,21 @@ migrate_database() {
 main() {
     # Check if correct number of arguments provided
     if [ "$#" -ne 2 ]; then
-        echo "Usage: $0 <source_uri> <destination_uri>"
-        echo "Example: $0 postgresql://user:pass@localhost:5432/sourcedb postgresql://user:pass@localhost:5432/destdb"
+        echo "Usage: $0 <source> <destination>"
+        echo "Where source and destination can be either:"
+        echo "  - PostgreSQL URI (postgresql://user:pass@host:port/dbname)"
+        echo "  - Backup file path (.dump)"
+        echo ""
+        echo "Examples:"
+        echo "  $0 postgresql://user:pass@localhost:5432/sourcedb postgresql://user:pass@localhost:5432/destdb"
+        echo "  $0 backup.dump postgresql://user:pass@localhost:5432/newdb"
+        echo "  $0 postgresql://user:pass@localhost:5432/sourcedb backup.dump"
+        echo "  $0 source.dump dest.dump"
         exit 1
     fi
     
-    local source_uri=$1
-    local dest_uri=$2
-    
-    # Validate URIs
-    validate_uri "$source_uri"
-    validate_uri "$dest_uri"
+    local source=$1
+    local dest=$2
     
     # Check required tools
     check_requirements
