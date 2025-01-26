@@ -33,31 +33,28 @@ check_requirements() {
       done
 }
 
-# Function to perform the backup and restore
-migrate_database() {
-    local source_uri=$1
-    local dest_uri=$2
-    local dump_file="/tmp/db_backup_$(date +%Y%m%d_%H%M%S).dump"
+# Function to backup a database
+backup_database() {
+    local uri=$1
+    local dump_file=$2
     
-    # Parse URIs
-    IFS='|' read src_user src_pass src_host src_port src_db <<< $(parse_uri "$source_uri")
-    IFS='|' read dst_user dst_pass dst_host dst_port dst_db <<< $(parse_uri "$dest_uri")
+    # Parse URI
+    IFS='|' read user pass host port db <<< $(parse_uri "$uri")
     
-    echo "Starting database migration..."
-    echo "Source database: $src_db on $src_host:$src_port"
-    echo "Destination database: $dst_db on $dst_host:$dst_port"
+    echo "Starting database backup..."
+    echo "Source database: $db on $host:$port"
     
-    # Dump the source database
-    echo "Creating backup from source database..."
-    PGPASSWORD=$src_pass pg_dump \
+    # Dump the database
+    echo "Creating backup..."
+    PGPASSWORD=$pass pg_dump \
         -Fc \
         -v \
         --no-owner \
         --no-acl \
-        -h "$src_host" \
-        -p "$src_port" \
-        -U "$src_user" \
-        -d "$src_db" \
+        -h "$host" \
+        -p "$port" \
+        -U "$user" \
+        -d "$db" \
         -f "$dump_file"
     
     # Check if dump was successful
@@ -67,42 +64,73 @@ migrate_database() {
         exit 1
     fi
     
-    # Drop existing connections to the destination database
-    echo "Dropping existing connections to destination database..."
-    PGPASSWORD=$dst_pass psql \
-        -h "$dst_host" \
-        -p "$dst_port" \
-        -U "$dst_user" \
-        -d postgres \
-        -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$dst_db' AND pid <> pg_backend_pid();"
+    echo "Backup completed successfully!"
+}
+
+# Function to restore a database
+restore_database() {
+    local uri=$1
+    local dump_file=$2
     
-    # Drop and recreate the destination database
-    echo "Recreating destination database..."
-    PGPASSWORD=$dst_pass psql \
-        -h "$dst_host" \
-        -p "$dst_port" \
-        -U "$dst_user" \
-        -d postgres \
-        -c "DROP DATABASE IF EXISTS \"$dst_db\";"
+    # Parse URI
+    IFS='|' read user pass host port db <<< $(parse_uri "$uri")
     
-    PGPASSWORD=$dst_pass psql \
-        -h "$dst_host" \
-        -p "$dst_port" \
-        -U "$dst_user" \
-        -d postgres \
-        -c "CREATE DATABASE \"$dst_db\";"
+    echo "Starting database restore..."
+    echo "Destination database: $db on $host:$port"
     
-    # Restore the dump to the destination
-    echo "Restoring backup to destination database..."
-    PGPASSWORD=$dst_pass pg_restore \
+    # Drop existing connections
+    echo "Dropping existing connections..."
+    PGPASSWORD=$pass psql \
+        -h "$host" \
+        -p "$port" \
+        -U "$user" \
+        -d postgres \
+        -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$db' AND pid <> pg_backend_pid();"
+    
+    # Drop and recreate the database
+    echo "Recreating database..."
+    PGPASSWORD=$pass psql \
+        -h "$host" \
+        -p "$port" \
+        -U "$user" \
+        -d postgres \
+        -c "DROP DATABASE IF EXISTS \"$db\";"
+    
+    PGPASSWORD=$pass psql \
+        -h "$host" \
+        -p "$port" \
+        -U "$user" \
+        -d postgres \
+        -c "CREATE DATABASE \"$db\";"
+    
+    # Restore the dump
+    echo "Restoring backup..."
+    PGPASSWORD=$pass pg_restore \
         -v \
         --no-owner \
         --no-acl \
-        -h "$dst_host" \
-        -p "$dst_port" \
-        -U "$dst_user" \
-        -d "$dst_db" \
+        -h "$host" \
+        -p "$port" \
+        -U "$user" \
+        -d "$db" \
         "$dump_file"
+    
+    echo "Restore completed successfully!"
+}
+
+# Function to perform the migration
+migrate_database() {
+    local source_uri=$1
+    local dest_uri=$2
+    local dump_file="/tmp/db_backup_$(date +%Y%m%d_%H%M%S).dump"
+    
+    echo "Starting database migration..."
+    
+    # Perform backup
+    backup_database "$source_uri" "$dump_file"
+    
+    # Perform restore
+    restore_database "$dest_uri" "$dump_file"
     
     # Cleanup
     rm -f "$dump_file"
