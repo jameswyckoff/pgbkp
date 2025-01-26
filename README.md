@@ -11,16 +11,23 @@ A simple yet powerful command-line tool for backing up, restoring, and migrating
 - Automatic handling of database connections
 - Clean database recreation during restore
 
-## Installation
+## Installation & Usage
 
-### Using Nix Flakes
+### Using Nix (Recommended)
 
+There are several ways to use this tool with Nix:
+
+1. Quick run without installation:
+```bash
+nix run github:yourusername/pgbkp -- <source> <destination>
+```
+
+2. Install to your profile:
 ```bash
 nix profile install github:yourusername/pgbkp
 ```
 
-Or add it to your flake inputs:
-
+3. Add to your NixOS/Home Manager configuration:
 ```nix
 {
   inputs.pgbkp.url = "github:yourusername/pgbkp";
@@ -30,7 +37,21 @@ Or add it to your flake inputs:
 }
 ```
 
-## Usage
+### Manual Usage
+
+While using Nix is recommended to ensure correct dependencies, you can also run the script directly if you have the required dependencies installed:
+
+- PostgreSQL client tools (pg_dump, pg_restore, psql) - must be the same version as your PostgreSQL server
+- file command
+
+Clone the repository and make the script executable:
+```bash
+git clone https://github.com/yourusername/pgbkp.git
+chmod +x pgbkp/script.sh
+./pgbkp/script.sh <source> <destination>
+```
+
+## Usage Examples
 
 ```bash
 pgbkp <source> <destination>
